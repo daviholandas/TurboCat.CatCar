@@ -482,3 +482,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# SonarCloud and CI artifacts
+.sonar/
+TestResults/
