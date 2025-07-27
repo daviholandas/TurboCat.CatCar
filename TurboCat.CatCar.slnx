@@ -1,0 +1,5 @@
+﻿<Solution>
+  <Folder Name="/BoundedContexts/">
+    <Project Path="src\CatCar.FrontOffice\CatCar.FrontOffice.csproj" Type="Classic C#" />
+  </Folder>
+</Solution>
