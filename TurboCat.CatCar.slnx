@@ -1,5 +1,17 @@
 ﻿<Solution>
-  <Folder Name="/BoundedContexts/">
+  <Folder Name="/BoundedContexts/" />
+  <Folder Name="/BoundedContexts/1.Core/" />
+  <Folder Name="/BoundedContexts/1.Core/1.1.FrontOffice/">
     <Project Path="src\CatCar.FrontOffice\CatCar.FrontOffice.csproj" Type="Classic C#" />
+    <Project Path="tests\CatCar.FrontOffice.UnitTests\CatCar.FrontOffice.UnitTests.csproj" Type="Classic C#" />
+  </Folder>
+  <Folder Name="/BoundedContexts/1.Core/1.2.WorkShop/">
+    <Project Path="src\CatCar.WorkShop\CatCar.WorkShop.csproj" Type="Classic C#" />
+  </Folder>
+  <Folder Name="/BoundedContexts/2.Supporting/">
+    <Project Path="src\CatCar.Inventory\CatCar.Inventory.csproj" Type="Classic C#" />
+  </Folder>
+  <Folder Name="/BoundedContexts/3.Shared/">
+    <Project Path="src\CatCar.SharedKernel\CatCar.SharedKernel.csproj" Type="Classic C#" />
   </Folder>
 </Solution>

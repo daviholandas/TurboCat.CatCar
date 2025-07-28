@@ -1,6 +1,3 @@
 ﻿namespace CatCar.SharedKernel.Common;
 
-public interface IAggregate
-{
-    
-}
+public interface IAggregate;
