@@ -50,7 +50,7 @@ jobs:
         dotnet tool update dotnet-sonarscanner --tool-path ./.sonar/scanner
 
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore TurboCat.CatCar.sln
 
     - name: Begin SonarCloud analysis
       env:
@@ -65,11 +65,11 @@ jobs:
           /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
 
     - name: Build
-      run: dotnet build --no-restore --configuration Release
+      run: dotnet build TurboCat.CatCar.sln --no-restore --configuration Release
 
     - name: Test
       run: |
-        dotnet test --no-build --configuration Release --verbosity normal \
+        dotnet test TurboCat.CatCar.sln --no-build --configuration Release --verbosity normal \
           --collect:"XPlat Code Coverage" \
           --logger trx \
           --results-directory TestResults/ \
