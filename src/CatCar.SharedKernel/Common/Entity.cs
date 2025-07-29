@@ -3,18 +3,18 @@
 public abstract class Entity : IEquatable<Entity>
 {
     public Guid Id { get; init; } = Guid.CreateVersion7();
-    public DateTime CreatedAt { get; init; } = DateTime.Now;
+    public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; protected set; }
     public bool IsDeleted { get; protected set; }
 
     public virtual void MarkAsDeleted()
     {
         IsDeleted = true;
-        UpdatedAt = DateTime.Now;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public virtual void Update()
-        => UpdatedAt = DateTime.Now;
+        => UpdatedAt = DateTime.UtcNow;
 
     public bool Equals(Entity? other)
     {
