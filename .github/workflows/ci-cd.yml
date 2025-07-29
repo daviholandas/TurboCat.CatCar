@@ -170,14 +170,31 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Wait for SonarQube Quality Gate
-      uses: sonarqube-quality-gate-action@master
-      with:
-        timeout-minutes: 5
+    - name: Check SonarQube Quality Gate
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+      run: |
+        echo "Checking SonarQube Quality Gate status..."
+        
+        # Wait for SonarQube analysis to complete
+        sleep 30
+        
+        # Get the quality gate status from SonarQube API
+        QUALITY_GATE_STATUS=$(curl -s -u "$SONAR_TOKEN:" \
+          "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY" \
+          | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+        
+        echo "Quality Gate Status: $QUALITY_GATE_STATUS"
+        
+        if [ "$QUALITY_GATE_STATUS" = "OK" ]; then
+          echo "✅ SonarQube Quality Gate passed!"
+        else
+          echo "❌ SonarQube Quality Gate failed!"
+          exit 1
+        fi
 
-    - name: Quality Gate Status
+    - name: Quality Gate Status Summary
       run: |
         if [[ "${{ needs.build-and-test.result }}" == "success" ]] && [[ "${{ needs.security-scan.result }}" == "success" ]]; then
           echo "✅ All quality checks passed!"
@@ -194,3 +211,4 @@ jobs:
         echo "## Quality Gate Summary" >> $GITHUB_STEP_SUMMARY
         echo "- Build and Test: ${{ needs.build-and-test.result }}" >> $GITHUB_STEP_SUMMARY
         echo "- Security Scan: ${{ needs.security-scan.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- SonarQube Analysis: Completed" >> $GITHUB_STEP_SUMMARY
