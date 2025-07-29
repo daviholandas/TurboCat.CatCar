@@ -5,10 +5,16 @@ on:
     branches: [ master, develop ]
   pull_request:
     branches: [ master, develop ]
+  workflow_dispatch:
 
 env:
   DOTNET_VERSION: '9.0.x'
-  SOLUTION_PATH: 'TurboCat.CatCar.slnx'
+  SOLUTION_PATH: 'TurboCat.CatCar.sln'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
 
 jobs:
   build-and-test:
@@ -58,7 +64,7 @@ jobs:
     - name: Install SonarQube scanner
       if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
       run: |
-        dotnet tool install --global dotnet-sonarscanner
+        dotnet tool install --global dotnet-sonarscanner --version 5.15.0
 
     - name: Restore dependencies
       run: dotnet restore ${{ env.SOLUTION_PATH }}
@@ -68,7 +74,14 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       run: |
-        dotnet sonarscanner begin /k:"${{ secrets.SONAR_PROJECT_KEY }}" /o:"${{ secrets.SONAR_ORGANIZATION }}" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" /d:sonar.coverage.exclusions="**Tests*.cs,**/*Test.cs,**/*Tests.cs,**/Program.cs,**/Startup.cs"
+        dotnet sonarscanner begin \
+          /k:"${{ secrets.SONAR_PROJECT_KEY }}" \
+          /o:"${{ secrets.SONAR_ORGANIZATION }}" \
+          /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
+          /d:sonar.host.url="https://sonarcloud.io" \
+          /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" \
+          /d:sonar.coverage.exclusions="**/*Tests*.cs,**/*Test.cs,**/Program.cs,**/Startup.cs" \
+          /d:sonar.exclusions="**/bin/**,**/obj/**"
 
     - name: Build solution
       run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --no-restore
@@ -80,7 +93,7 @@ jobs:
           --no-build \
           --verbosity normal \
           --collect:"XPlat Code Coverage" \
-          --results-directory ./coverage \
+          --results-directory ./TestResults \
           --logger trx \
           --logger "console;verbosity=detailed" \
           -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
@@ -91,8 +104,8 @@ jobs:
     - name: Generate coverage report
       run: |
         reportgenerator \
-          -reports:"coverage/**/coverage.opencover.xml" \
-          -targetdir:"coverage/report" \
+          -reports:"TestResults/**/coverage.opencover.xml" \
+          -targetdir:"TestResults/CoverageReport" \
           -reporttypes:"Html;TextSummary"
 
     - name: End SonarQube analysis
@@ -104,16 +117,24 @@ jobs:
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4
       with:
-        directory: ./coverage
+        directory: ./TestResults
         fail_ci_if_error: false
         verbose: true
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Upload coverage reports as artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-reports
+        path: TestResults/CoverageReport/
+        retention-days: 30
 
     - name: Publish test results
       uses: dorny/test-reporter@v1
       if: success() || failure()
       with:
         name: .NET Tests
-        path: "**/*.trx"
+        path: "TestResults/**/*.trx"
         reporter: dotnet-trx
 
   security-scan:
@@ -126,7 +147,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@0.24.0
       with:
         scan-type: 'fs'
         scan-ref: '.'
@@ -146,12 +167,14 @@ jobs:
     if: always()
 
     steps:
-    - name: Check SonarQube Quality Gate
-      uses: sonarqube-quality-gate-action@v1.0.0
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Wait for SonarQube Quality Gate
+      uses: sonarqube-quality-gate-action@master
+      timeout-minutes: 5
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      with:
-        scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
 
     - name: Quality Gate Status
       run: |
@@ -159,5 +182,14 @@ jobs:
           echo "✅ All quality checks passed!"
         else
           echo "❌ Quality checks failed!"
+          echo "Build result: ${{ needs.build-and-test.result }}"
+          echo "Security scan result: ${{ needs.security-scan.result }}"
           exit 1
         fi
+
+    - name: Report Quality Gate Result
+      if: always()
+      run: |
+        echo "## Quality Gate Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- Build and Test: ${{ needs.build-and-test.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Security Scan: ${{ needs.security-scan.result }}" >> $GITHUB_STEP_SUMMARY
