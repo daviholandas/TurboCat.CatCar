@@ -4,6 +4,7 @@
         <TargetFramework>net9.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <ProjectGuid>{F6G7H8I9-J0K1-2345-F012-678901234567}</ProjectGuid>
     </PropertyGroup>
 
     <ItemGroup>
