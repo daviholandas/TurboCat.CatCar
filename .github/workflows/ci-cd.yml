@@ -196,11 +196,51 @@ jobs:
         fetch-depth: 0
 
     - name: Check SonarQube Quality Gate
-      uses: sonarqube-quality-gate-action@v1.0.0
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      with:
-        scanMetadataReportFile: .sonar/report-task.txt
+      run: |
+        # Wait for SonarQube analysis to complete
+        echo "Checking SonarQube Quality Gate status..."
+        
+        # Get the task URL from the report-task.txt file
+        if [ -f ".sonar/report-task.txt" ]; then
+          TASK_URL=$(grep 'ceTaskUrl=' .sonar/report-task.txt | cut -d'=' -f2-)
+          echo "Task URL: $TASK_URL"
+          
+          # Extract task ID from URL
+          TASK_ID=$(echo $TASK_URL | sed 's/.*id=//')
+          echo "Task ID: $TASK_ID"
+          
+          # Poll for task completion
+          for i in {1..30}; do
+            TASK_STATUS=$(curl -s -u "${SONAR_TOKEN}:" "${TASK_URL}" | jq -r '.task.status')
+            echo "Task status: $TASK_STATUS"
+            
+            if [ "$TASK_STATUS" = "SUCCESS" ]; then
+              echo "✅ SonarQube analysis completed successfully"
+              break
+            elif [ "$TASK_STATUS" = "FAILED" ] || [ "$TASK_STATUS" = "CANCELLED" ]; then
+              echo "❌ SonarQube analysis failed"
+              exit 1
+            fi
+            
+            echo "Waiting for SonarQube analysis to complete... (attempt $i/30)"
+            sleep 10
+          done
+          
+          # Check quality gate status
+          PROJECT_KEY="${{ secrets.SONAR_PROJECT_KEY }}"
+          QG_STATUS=$(curl -s -u "${SONAR_TOKEN}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${PROJECT_KEY}" | jq -r '.projectStatus.status')
+          
+          if [ "$QG_STATUS" = "OK" ]; then
+            echo "✅ SonarQube Quality Gate passed"
+          else
+            echo "❌ SonarQube Quality Gate failed with status: $QG_STATUS"
+            exit 1
+          fi
+        else
+          echo "⚠️ SonarQube report-task.txt not found, skipping quality gate check"
+        fi
 
     - name: Quality Gate Status Summary
       run: |
