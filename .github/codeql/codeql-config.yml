@@ -1,0 +1,36 @@
+# CodeQL Configuration for TurboCat.CatCar
+# This configuration optimizes CodeQL analysis for .NET projects following Clean Architecture
+
+name: "TurboCat CatCar CodeQL Config"
+
+# Disable default queries and use custom query suites
+disable-default-queries: false
+
+# Additional query suites for enhanced security analysis
+queries:
+  - name: security-extended
+    uses: security-extended
+  - name: security-and-quality
+    uses: security-and-quality
+
+# Paths to include in analysis
+paths:
+  - src/
+  - tests/
+
+# Paths to exclude from analysis
+paths-ignore:
+  - "src/**/bin/**"
+  - "src/**/obj/**"
+  - "src/**/wwwroot/lib/**"
+  - "tests/**/bin/**"
+  - "tests/**/obj/**"
+  - "docs/**"
+  - "spec/**"
+
+# Build command for .NET projects
+# CodeQL will analyze the compiled code for better accuracy
+build:
+  commands:
+    - "dotnet restore TurboCat.CatCar.sln"
+    - "dotnet build TurboCat.CatCar.sln --configuration Release --no-restore"

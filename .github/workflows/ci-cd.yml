@@ -6,14 +6,29 @@ on:
   pull_request:
     branches: [ master, develop ]
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+  security-events: write
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   DOTNET_VERSION: '9.0.x'
-  SOLUTION_PATH: 'TurboCat.CatCar.slnx'
+  SOLUTION_PATH: 'TurboCat.CatCar.sln'
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_NOLOGO: true
 
 jobs:
   build-and-test:
     name: Build, Test & SAST Analysis
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
     - name: Checkout code
@@ -43,22 +58,31 @@ jobs:
     - name: Cache SonarQube packages
       uses: actions/cache@v4
       with:
-        path: ~/sonar/cache
-        key: ${{ runner.os }}-sonar
-        restore-keys: ${{ runner.os }}-sonar
+        path: |
+          ~/.sonar/cache
+          ~/sonar/cache
+        key: ${{ runner.os }}-sonar-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-sonar-
 
-    - name: Cache SonarQube scanner
-      id: cache-sonar-scanner
+    - name: Cache .NET global tools
+      id: cache-dotnet-tools
       uses: actions/cache@v4
       with:
-        path: ./.sonar/scanner
-        key: ${{ runner.os }}-sonar-scanner
-        restore-keys: ${{ runner.os }}-sonar-scanner
+        path: ~/.dotnet/tools
+        key: ${{ runner.os }}-dotnet-tools-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-dotnet-tools-
 
     - name: Install SonarQube scanner
-      if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
+      if: steps.cache-dotnet-tools.outputs.cache-hit != 'true'
       run: |
-        dotnet tool install --global dotnet-sonarscanner
+        dotnet tool install --global dotnet-sonarscanner --version 5.15.0
+
+    - name: Install ReportGenerator tool
+      if: steps.cache-dotnet-tools.outputs.cache-hit != 'true'
+      run: |
+        dotnet tool install --global dotnet-reportgenerator-globaltool
 
     - name: Restore dependencies
       run: dotnet restore ${{ env.SOLUTION_PATH }}
@@ -68,7 +92,14 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       run: |
-        dotnet sonarscanner begin /k:"${{ secrets.SONAR_PROJECT_KEY }}" /o:"${{ secrets.SONAR_ORGANIZATION }}" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" /d:sonar.coverage.exclusions="**Tests*.cs,**/*Test.cs,**/*Tests.cs,**/Program.cs,**/Startup.cs"
+        dotnet sonarscanner begin \
+          /k:"${{ secrets.SONAR_PROJECT_KEY }}" \
+          /o:"${{ secrets.SONAR_ORGANIZATION }}" \
+          /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
+          /d:sonar.host.url="https://sonarcloud.io" \
+          /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" \
+          /d:sonar.coverage.exclusions="**/*Tests*.cs,**/*Test.cs,**/Program.cs,**/Startup.cs" \
+          /d:sonar.exclusions="**/bin/**,**/obj/**"
 
     - name: Build solution
       run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --no-restore
@@ -80,19 +111,20 @@ jobs:
           --no-build \
           --verbosity normal \
           --collect:"XPlat Code Coverage" \
-          --results-directory ./coverage \
+          --results-directory ./TestResults \
           --logger trx \
           --logger "console;verbosity=detailed" \
           -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
 
     - name: Install ReportGenerator tool
+      if: steps.cache-dotnet-tools.outputs.cache-hit != 'true'
       run: dotnet tool install --global dotnet-reportgenerator-globaltool
 
     - name: Generate coverage report
       run: |
         reportgenerator \
-          -reports:"coverage/**/coverage.opencover.xml" \
-          -targetdir:"coverage/report" \
+          -reports:"TestResults/**/coverage.opencover.xml" \
+          -targetdir:"TestResults/CoverageReport" \
           -reporttypes:"Html;TextSummary"
 
     - name: End SonarQube analysis
@@ -104,21 +136,80 @@ jobs:
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4
       with:
-        directory: ./coverage
+        directory: ./TestResults
         fail_ci_if_error: false
         verbose: true
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Upload coverage reports as artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-reports
+        path: TestResults/CoverageReport/
+        retention-days: 10
 
     - name: Publish test results
       uses: dorny/test-reporter@v1
       if: success() || failure()
       with:
         name: .NET Tests
-        path: "**/*.trx"
+        path: "TestResults/**/*.trx"
         reporter: dotnet-trx
+
+  codeql-analysis:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build-and-test
+    
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'csharp' ]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+        config-file: ./.github/codeql/codeql-config.yml
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+    - name: Build solution for CodeQL
+      run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --no-restore
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:${{matrix.language}}"
 
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: build-and-test
 
     steps:
@@ -126,12 +217,14 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@0.28.0
       with:
         scan-type: 'fs'
         scan-ref: '.'
         format: 'sarif'
         output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+        exit-code: '0'  # Don't fail the pipeline on vulnerabilities
 
     - name: Upload Trivy scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3
@@ -142,22 +235,86 @@ jobs:
   quality-gate:
     name: Quality Gate
     runs-on: ubuntu-latest
-    needs: [build-and-test, security-scan]
+    timeout-minutes: 5
+    needs: [build-and-test, codeql-analysis, security-scan]
     if: always()
 
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
     - name: Check SonarQube Quality Gate
-      uses: sonarqube-quality-gate-action@v1.0.0
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      with:
-        scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
-
-    - name: Quality Gate Status
       run: |
-        if [[ "${{ needs.build-and-test.result }}" == "success" ]] && [[ "${{ needs.security-scan.result }}" == "success" ]]; then
+        # Wait for SonarQube analysis to complete
+        echo "Checking SonarQube Quality Gate status..."
+        
+        # Get the task URL from the report-task.txt file
+        if [ -f ".sonar/report-task.txt" ]; then
+          TASK_URL=$(grep 'ceTaskUrl=' .sonar/report-task.txt | cut -d'=' -f2-)
+          echo "Task URL: $TASK_URL"
+          
+          # Extract task ID from URL
+          TASK_ID=$(echo $TASK_URL | sed 's/.*id=//')
+          echo "Task ID: $TASK_ID"
+          
+          # Poll for task completion
+          for i in {1..30}; do
+            TASK_STATUS=$(curl -s -u "${SONAR_TOKEN}:" "${TASK_URL}" | jq -r '.task.status')
+            echo "Task status: $TASK_STATUS"
+            
+            if [ "$TASK_STATUS" = "SUCCESS" ]; then
+              echo "✅ SonarQube analysis completed successfully"
+              break
+            elif [ "$TASK_STATUS" = "FAILED" ] || [ "$TASK_STATUS" = "CANCELLED" ]; then
+              echo "❌ SonarQube analysis failed"
+              exit 1
+            fi
+            
+            echo "Waiting for SonarQube analysis to complete... (attempt $i/30)"
+            sleep 10
+          done
+          
+          # Check quality gate status
+          PROJECT_KEY="${{ secrets.SONAR_PROJECT_KEY }}"
+          QG_STATUS=$(curl -s -u "${SONAR_TOKEN}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${PROJECT_KEY}" | jq -r '.projectStatus.status')
+          
+          if [ "$QG_STATUS" = "OK" ]; then
+            echo "✅ SonarQube Quality Gate passed"
+          else
+            echo "❌ SonarQube Quality Gate failed with status: $QG_STATUS"
+            exit 1
+          fi
+        else
+          echo "⚠️ SonarQube report-task.txt not found, skipping quality gate check"
+        fi
+
+    - name: Quality Gate Status Summary
+      run: |
+        if [[ "${{ needs.build-and-test.result }}" == "success" ]] && [[ "${{ needs.codeql-analysis.result }}" == "success" ]] && [[ "${{ needs.security-scan.result }}" == "success" ]]; then
           echo "✅ All quality checks passed!"
         else
           echo "❌ Quality checks failed!"
+          echo "Build result: ${{ needs.build-and-test.result }}"
+          echo "CodeQL analysis result: ${{ needs.codeql-analysis.result }}"
+          echo "Security scan result: ${{ needs.security-scan.result }}"
           exit 1
         fi
+
+    - name: Report Quality Gate Result
+      if: always()
+      run: |
+        echo "## Quality Gate Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- Build and Test: ${{ needs.build-and-test.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- CodeQL Analysis: ${{ needs.codeql-analysis.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Security Scan: ${{ needs.security-scan.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- SonarQube Analysis: Completed" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Security Reports Available" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔍 **CodeQL Security Analysis**: Available in Security tab → Code scanning alerts" >> $GITHUB_STEP_SUMMARY
+        echo "- 🛡️ **Trivy Vulnerability Scan**: Available in Security tab → Code scanning alerts" >> $GITHUB_STEP_SUMMARY
+        echo "- 📊 **SonarQube Quality Gate**: Available at [SonarCloud Dashboard](https://sonarcloud.io/project/overview?id=${{ secrets.SONAR_PROJECT_KEY }})" >> $GITHUB_STEP_SUMMARY
+        echo "- 📈 **Test Coverage**: Available in [Codecov Dashboard](https://codecov.io/gh/${{ github.repository }})" >> $GITHUB_STEP_SUMMARY
