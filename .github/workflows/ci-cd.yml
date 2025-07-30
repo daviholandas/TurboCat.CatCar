@@ -58,19 +58,14 @@ jobs:
     - name: Cache SonarQube packages
       uses: actions/cache@v4
       with:
-        path: ~/sonar/cache
-        key: ${{ runner.os }}-sonar
-        restore-keys: ${{ runner.os }}-sonar
+        path: |
+          ~/.sonar/cache
+          ~/sonar/cache
+        key: ${{ runner.os }}-sonar-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-sonar-
 
-    - name: Cache SonarQube scanner
-      id: cache-sonar-scanner
-      uses: actions/cache@v4
-      with:
-        path: ./.sonar/scanner
-        key: ${{ runner.os }}-sonar-scanner
-        restore-keys: ${{ runner.os }}-sonar-scanner
-
-    - name: Cache .NET tools
+    - name: Cache .NET global tools
       id: cache-dotnet-tools
       uses: actions/cache@v4
       with:
@@ -80,9 +75,14 @@ jobs:
           ${{ runner.os }}-dotnet-tools-
 
     - name: Install SonarQube scanner
-      if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
+      if: steps.cache-dotnet-tools.outputs.cache-hit != 'true'
       run: |
         dotnet tool install --global dotnet-sonarscanner --version 5.15.0
+
+    - name: Install ReportGenerator tool
+      if: steps.cache-dotnet-tools.outputs.cache-hit != 'true'
+      run: |
+        dotnet tool install --global dotnet-reportgenerator-globaltool
 
     - name: Restore dependencies
       run: dotnet restore ${{ env.SOLUTION_PATH }}
