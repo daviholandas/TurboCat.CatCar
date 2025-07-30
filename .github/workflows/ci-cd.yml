@@ -156,6 +156,56 @@ jobs:
         path: "TestResults/**/*.trx"
         reporter: dotnet-trx
 
+  codeql-analysis:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build-and-test
+    
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'csharp' ]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+        config-file: ./.github/codeql/codeql-config.yml
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+    - name: Build solution for CodeQL
+      run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --no-restore
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:${{matrix.language}}"
+
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -186,7 +236,7 @@ jobs:
     name: Quality Gate
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [build-and-test, security-scan]
+    needs: [build-and-test, codeql-analysis, security-scan]
     if: always()
 
     steps:
@@ -244,11 +294,12 @@ jobs:
 
     - name: Quality Gate Status Summary
       run: |
-        if [[ "${{ needs.build-and-test.result }}" == "success" ]] && [[ "${{ needs.security-scan.result }}" == "success" ]]; then
+        if [[ "${{ needs.build-and-test.result }}" == "success" ]] && [[ "${{ needs.codeql-analysis.result }}" == "success" ]] && [[ "${{ needs.security-scan.result }}" == "success" ]]; then
           echo "✅ All quality checks passed!"
         else
           echo "❌ Quality checks failed!"
           echo "Build result: ${{ needs.build-and-test.result }}"
+          echo "CodeQL analysis result: ${{ needs.codeql-analysis.result }}"
           echo "Security scan result: ${{ needs.security-scan.result }}"
           exit 1
         fi
@@ -258,5 +309,12 @@ jobs:
       run: |
         echo "## Quality Gate Summary" >> $GITHUB_STEP_SUMMARY
         echo "- Build and Test: ${{ needs.build-and-test.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- CodeQL Analysis: ${{ needs.codeql-analysis.result }}" >> $GITHUB_STEP_SUMMARY
         echo "- Security Scan: ${{ needs.security-scan.result }}" >> $GITHUB_STEP_SUMMARY
         echo "- SonarQube Analysis: Completed" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Security Reports Available" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔍 **CodeQL Security Analysis**: Available in Security tab → Code scanning alerts" >> $GITHUB_STEP_SUMMARY
+        echo "- 🛡️ **Trivy Vulnerability Scan**: Available in Security tab → Code scanning alerts" >> $GITHUB_STEP_SUMMARY
+        echo "- 📊 **SonarQube Quality Gate**: Available at [SonarCloud Dashboard](https://sonarcloud.io/project/overview?id=${{ secrets.SONAR_PROJECT_KEY }})" >> $GITHUB_STEP_SUMMARY
+        echo "- 📈 **Test Coverage**: Available in [Codecov Dashboard](https://codecov.io/gh/${{ github.repository }})" >> $GITHUB_STEP_SUMMARY
