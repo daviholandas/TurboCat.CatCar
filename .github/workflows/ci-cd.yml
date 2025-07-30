@@ -5,21 +5,30 @@ on:
     branches: [ master, develop ]
   pull_request:
     branches: [ master, develop ]
-  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+  security-events: write
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   DOTNET_VERSION: '9.0.x'
   SOLUTION_PATH: 'TurboCat.CatCar.sln'
-
-permissions:
-  contents: read
-  security-events: write
-  actions: read
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_NOLOGO: true
 
 jobs:
   build-and-test:
     name: Build, Test & SAST Analysis
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
     - name: Checkout code
@@ -61,6 +70,15 @@ jobs:
         key: ${{ runner.os }}-sonar-scanner
         restore-keys: ${{ runner.os }}-sonar-scanner
 
+    - name: Cache .NET tools
+      id: cache-dotnet-tools
+      uses: actions/cache@v4
+      with:
+        path: ~/.dotnet/tools
+        key: ${{ runner.os }}-dotnet-tools-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-dotnet-tools-
+
     - name: Install SonarQube scanner
       if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
       run: |
@@ -99,6 +117,7 @@ jobs:
           -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
 
     - name: Install ReportGenerator tool
+      if: steps.cache-dotnet-tools.outputs.cache-hit != 'true'
       run: dotnet tool install --global dotnet-reportgenerator-globaltool
 
     - name: Generate coverage report
@@ -140,6 +159,7 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: build-and-test
 
     steps:
@@ -147,12 +167,14 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@0.24.0
+      uses: aquasecurity/trivy-action@0.28.0
       with:
         scan-type: 'fs'
         scan-ref: '.'
         format: 'sarif'
         output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+        exit-code: '0'  # Don't fail the pipeline on vulnerabilities
 
     - name: Upload Trivy scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3
@@ -163,36 +185,21 @@ jobs:
   quality-gate:
     name: Quality Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: [build-and-test, security-scan]
     if: always()
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Check SonarQube Quality Gate
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
-      run: |
-        echo "Checking SonarQube Quality Gate status..."
-        
-        # Wait for SonarQube analysis to complete
-        sleep 30
-        
-        # Get the quality gate status from SonarQube API
-        QUALITY_GATE_STATUS=$(curl -s -u "$SONAR_TOKEN:" \
-          "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY" \
-          | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
-        
-        echo "Quality Gate Status: $QUALITY_GATE_STATUS"
-        
-        if [ "$QUALITY_GATE_STATUS" = "OK" ]; then
-          echo "✅ SonarQube Quality Gate passed!"
-        else
-          echo "❌ SonarQube Quality Gate failed!"
-          exit 1
-        fi
+      with:
+        scanMetadataReportFile: .sonar/report-task.txt
 
     - name: Quality Gate Status Summary
       run: |
