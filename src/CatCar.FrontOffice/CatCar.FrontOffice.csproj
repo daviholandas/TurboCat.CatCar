@@ -10,4 +10,8 @@
       <Folder Include="Domain\" />
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\CatCar.SharedKernel\CatCar.SharedKernel.csproj" />
+    </ItemGroup>
+
 </Project>
