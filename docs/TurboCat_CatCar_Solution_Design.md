@@ -54,7 +54,7 @@ post_date: '2025-07-30'
 
 ## Visão Geral Executiva
 
-- **Author:** 'The TurboCat Architecture Team'
+- **Author:** 'Arquiteto de Soluções Davi Holanda && AI'
 - **Post Slug:** 'solution-design-turbocat-catcar'
 - **Featured Image:** '/images/turbocat-architecture-banner.png'
 - **Categories:**

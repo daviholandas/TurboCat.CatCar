@@ -96,18 +96,23 @@ The system focuses on **Reliable Repair Lifecycle Management** - ensuring vehicl
 #### 🏢 FrontOffice Context (Core Domain)
 
 **Responsibility**: Customer interaction and work order management
+
 - **Aggregates**: WorkOrder, Customer, Vehicle
 - **Key Features**: Service intake, quote generation, customer approval
 - **Integration**: Publishes events to Workshop and Billing contexts
 
-#### 🔧 Workshop Context (Core Domain)  
+#### 🔧 Workshop Context (Core Domain)
+
 **Responsibility**: Physical repair execution and resource management
+
 - **Aggregates**: RepairJob, Mechanic, WorkSchedule
 - **Key Features**: Diagnostic execution, repair tracking, quality control
 - **Integration**: Consumes FrontOffice events, integrates with Inventory
 
 #### 📦 Inventory Context (Supporting Domain)
+
 **Responsibility**: Parts management and procurement
+
 - **Aggregates**: InventoryItem, PurchaseOrder, Supplier
 - **Key Features**: Stock control, automated ordering, supplier management
 - **Integration**: Provides API for parts availability and pricing
@@ -115,6 +120,7 @@ The system focuses on **Reliable Repair Lifecycle Management** - ensuring vehicl
 #### 💳 Billing Context (Supporting Domain)
 
 **Responsibility**: Financial transactions and invoicing
+
 - **Aggregates**: Invoice, Payment, FinancialRecord
 - **Key Features**: Automated billing, payment processing, financial reporting
 - **Integration**: Triggered by repair completion events
@@ -122,6 +128,7 @@ The system focuses on **Reliable Repair Lifecycle Management** - ensuring vehicl
 #### 📢 Notifications Context (Generic Domain)
 
 **Responsibility**: Customer and internal communications
+
 - **Aggregates**: NotificationRequest, MessageTemplate
 - **Key Features**: SMS, email, push notifications, communication tracking
 - **Integration**: Consumes events from all contexts for relevant notifications
