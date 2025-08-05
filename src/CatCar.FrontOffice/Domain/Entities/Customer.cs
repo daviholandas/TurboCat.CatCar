@@ -16,17 +16,11 @@ public class Customer : AggregateRoot
     public bool IsActive { get; private set; }
     public string? PreferredContactMethod { get; private set; }
 
-    /// <summary>
-    /// Gets the list of vehicle IDs owned by this customer
-    /// </summary>
-    public IReadOnlyList<Guid> VehicleIds => _vehicleIds.AsReadOnly();
+    public IEnumerable<Guid> VehicleIds => _vehicleIds;
 
     // Private constructor for EF Core
     private Customer() { }
 
-    /// <summary>
-    /// Creates a new customer
-    /// </summary>
     public Customer(ContactInformation contactInformation, string? preferredContactMethod = null)
     {
         ContactInformation = contactInformation ?? throw new ArgumentNullException(nameof(contactInformation));
@@ -37,9 +31,7 @@ public class Customer : AggregateRoot
         AddDomainEvent(new CustomerRegisteredEvent(Id, contactInformation.FullName, contactInformation.Email));
     }
 
-    /// <summary>
-    /// Updates customer contact information
-    /// </summary>
+
     public void UpdateContactInformation(ContactInformation newContactInformation)
     {
         if (newContactInformation is null)
@@ -52,9 +44,7 @@ public class Customer : AggregateRoot
         Update();
     }
 
-    /// <summary>
-    /// Associates a vehicle with this customer
-    /// </summary>
+
     public void AddVehicle(Guid vehicleId)
     {
         if (vehicleId == Guid.Empty)
@@ -70,9 +60,6 @@ public class Customer : AggregateRoot
         }
     }
 
-    /// <summary>
-    /// Removes a vehicle association from this customer
-    /// </summary>
     public void RemoveVehicle(Guid vehicleId)
     {
         if (_vehicleIds.Remove(vehicleId))
@@ -81,9 +68,7 @@ public class Customer : AggregateRoot
         }
     }
 
-    /// <summary>
-    /// Updates the preferred contact method for this customer
-    /// </summary>
+
     public void UpdatePreferredContactMethod(string preferredContactMethod)
     {
         if (!IsActive)
@@ -93,9 +78,7 @@ public class Customer : AggregateRoot
         Update();
     }
 
-    /// <summary>
-    /// Deactivates the customer account
-    /// </summary>
+
     public void Deactivate()
     {
         if (!IsActive)
@@ -105,9 +88,7 @@ public class Customer : AggregateRoot
         Update();
     }
 
-    /// <summary>
-    /// Reactivates the customer account
-    /// </summary>
+
     public void Reactivate()
     {
         if (IsActive)
@@ -117,16 +98,11 @@ public class Customer : AggregateRoot
         Update();
     }
 
-    /// <summary>
-    /// Checks if the customer owns a specific vehicle
-    /// </summary>
+  
     public bool OwnsVehicle(Guid vehicleId)
     {
         return _vehicleIds.Contains(vehicleId);
     }
 
-    /// <summary>
-    /// Gets the total number of vehicles owned by this customer
-    /// </summary>
     public int VehicleCount => _vehicleIds.Count;
 }

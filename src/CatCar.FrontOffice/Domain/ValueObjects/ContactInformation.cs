@@ -27,17 +27,11 @@ public record ContactInformation
         Address = address ?? throw new ArgumentNullException(nameof(address));
     }
 
-    /// <summary>
-    /// Creates a new ContactInformation with updated email
-    /// </summary>
     public ContactInformation UpdateEmail(string newEmail)
     {
         return this with { Email = newEmail.Trim().ToLowerInvariant() };
     }
 
-    /// <summary>
-    /// Creates a new ContactInformation with updated phone number
-    /// </summary>
     public ContactInformation UpdatePhoneNumber(string newPhoneNumber)
     {
         return this with { PhoneNumber = newPhoneNumber.Trim() };

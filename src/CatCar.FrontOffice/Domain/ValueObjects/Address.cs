@@ -1,8 +1,5 @@
 namespace CatCar.FrontOffice.Domain.ValueObjects;
 
-/// <summary>
-/// Value Object representing a physical address
-/// </summary>
 public record Address
 {
     public string Street { get; init; }
@@ -32,9 +29,6 @@ public record Address
         Country = country.Trim();
     }
 
-    /// <summary>
-    /// Returns the full address as a formatted string
-    /// </summary>
     public string ToFullAddressString()
     {
         return $"{Street}, {City}, {State} {PostalCode}, {Country}";
