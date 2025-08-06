@@ -1,6 +1,8 @@
-﻿namespace CatCar.SharedKernel.Common;
+﻿using System.Diagnostics.CodeAnalysis;
 
-public abstract class Entity : IEquatable<Entity>
+namespace CatCar.SharedKernel.Common;
+
+public abstract class Entity : IEqualityComparer<Entity>
 {
     public Guid Id { get; init; } = Guid.CreateVersion7();
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
@@ -34,5 +36,18 @@ public abstract class Entity : IEquatable<Entity>
     public override int GetHashCode()
     {
         return Id.GetHashCode();
+    }
+
+    public bool Equals(Entity? x, Entity? y)
+    {
+        if (x is null && y is null) return true;
+        if (x is null || y is null) return false;
+        return x.Id.Equals(y.Id);
+    }
+
+    public int GetHashCode([DisallowNull] Entity obj)
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+        return obj.Id.GetHashCode();
     }
 }

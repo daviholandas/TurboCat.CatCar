@@ -3,9 +3,6 @@ using CatCar.FrontOffice.Domain.ValueObjects;
 
 namespace CatCar.FrontOffice.Domain.Entities;
 
-/// <summary>
-/// Vehicle aggregate root representing a customer's vehicle
-/// </summary>
 public class Vehicle : AggregateRoot
 {
     private readonly List<string> _serviceHistory = new();

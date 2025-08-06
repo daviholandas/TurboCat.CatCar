@@ -1,16 +1,16 @@
 using CatCar.SharedKernel.Common;
 using CatCar.FrontOffice.Domain.ValueObjects;
 using CatCar.FrontOffice.Domain.Events;
+using CatCar.SharedKernel.ValueObjects;
 
 namespace CatCar.FrontOffice.Domain.Entities;
 
-/// <summary>
-/// Customer aggregate root representing a customer in the automotive repair business
-/// </summary>
+
 public class Customer : AggregateRoot
 {
     private readonly HashSet<Guid> _vehicleIds = [];
 
+    public Cpf Cpf { get; private init; }
     public ContactInformation ContactInformation { get; private set; }
     public DateTime DateRegistered { get; private set; }
     public bool IsActive { get; private set; }
@@ -21,7 +21,8 @@ public class Customer : AggregateRoot
     // Private constructor for EF Core
     private Customer() { }
 
-    public Customer(ContactInformation contactInformation, string? preferredContactMethod = null)
+    public Customer(ContactInformation contactInformation,
+     string? preferredContactMethod = null)
     {
         ContactInformation = contactInformation ?? throw new ArgumentNullException(nameof(contactInformation));
         DateRegistered = DateTime.UtcNow;
